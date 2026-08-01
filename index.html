@@ -1,0 +1,149 @@
+Save the attached image as `room.png` next to this file, then open the HTML.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Room Look-Around Game</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: black;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    body.grabbing {
+      cursor: grabbing;
+    }
+
+    #game {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: black;
+    }
+
+    #portraitViewport {
+      position: relative;
+      height: 100vh;
+      aspect-ratio: 9 / 16;
+      max-width: 100vw;
+      overflow: hidden;
+      background: black;
+      box-shadow: 0 0 40px rgba(0,0,0,.8);
+    }
+
+    #room {
+      position: absolute;
+      height: 100%;
+      width: auto;
+      top: 0;
+      left: 0;
+      user-select: none;
+      pointer-events: none;
+      transform: translateX(0);
+      will-change: transform;
+    }
+
+    #hint {
+      position: absolute;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+      opacity: .75;
+      background: rgba(0,0,0,.35);
+      padding: 8px 12px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="game">
+    <div id="portraitViewport">
+      <img id="room" src="room.png" draggable="false" />
+      <div id="hint">Hold and drag left or right</div>
+    </div>
+  </div>
+
+  <script>
+    const viewport = document.getElementById("portraitViewport");
+    const room = document.getElementById("room");
+    const body = document.body;
+
+    let isDragging = false;
+    let startX = 0;
+    let startOffset = 0;
+    let offsetX = 0;
+    let minOffset = 0;
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function updateLimits() {
+      const viewportWidth = viewport.clientWidth;
+      const imageWidth = room.clientWidth;
+
+      minOffset = Math.min(0, viewportWidth - imageWidth);
+      offsetX = clamp(offsetX, minOffset, 0);
+
+      room.style.transform = `translateX(${offsetX}px)`;
+    }
+
+    room.onload = () => {
+      updateLimits();
+
+      // Start near the middle of the room
+      offsetX = minOffset / 2;
+      room.style.transform = `translateX(${offsetX}px)`;
+    };
+
+    window.addEventListener("resize", updateLimits);
+
+    function pointerDown(e) {
+      isDragging = true;
+      startX = e.clientX;
+      startOffset = offsetX;
+      body.classList.add("grabbing");
+      viewport.setPointerCapture(e.pointerId);
+    }
+
+    function pointerMove(e) {
+      if (!isDragging) return;
+
+      const dragDistance = e.clientX - startX;
+
+      // Drag screen like a mobile look-around camera
+      offsetX = clamp(startOffset + dragDistance, minOffset, 0);
+
+      room.style.transform = `translateX(${offsetX}px)`;
+    }
+
+    function pointerUp(e) {
+      isDragging = false;
+      body.classList.remove("grabbing");
+      try {
+        viewport.releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+
+    viewport.addEventListener("pointerdown", pointerDown);
+    viewport.addEventListener("pointermove", pointerMove);
+    viewport.addEventListener("pointerup", pointerUp);
+    viewport.addEventListener("pointercancel", pointerUp);
+  </script>
+</body>
+</html>
+```
