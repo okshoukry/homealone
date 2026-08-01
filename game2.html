@@ -1,0 +1,387 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Camera Room Game</title>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: black;
+      touch-action: none;
+      cursor: grab;
+      font-family: "Share Tech Mono", monospace;
+    }
+
+    body.grabbing { cursor: grabbing; }
+
+    #game {
+      width: 100vw;
+      height: 100vh;
+      background: black;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #portraitViewport {
+      position: relative;
+      height: 100vh;
+      aspect-ratio: 9 / 16;
+      max-width: 100vw;
+      overflow: hidden;
+      background: black;
+    }
+
+    #room {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: auto;
+      user-select: none;
+      pointer-events: none;
+      will-change: transform, filter;
+      transform: translateX(0) scale(1);
+      transition: filter 160ms ease, transform 220ms ease;
+    }
+
+    #portraitViewport.recording #room {
+      filter: blur(1px) contrast(1.06) saturate(1.08);
+      transform: translateX(var(--x, 0px)) scale(1.025);
+    }
+
+    .hud {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      color: white;
+      text-shadow: 0 0 4px black;
+    }
+
+    .top-left {
+      position: absolute;
+      top: 34px;
+      left: 22px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 17px;
+    }
+
+    .battery {
+      width: 31px;
+      height: 15px;
+      border: 2px solid white;
+      border-radius: 3px;
+      padding: 2px;
+      display: flex;
+      gap: 2px;
+      box-sizing: border-box;
+      position: relative;
+    }
+
+    .battery:after {
+      content: "";
+      position: absolute;
+      right: -5px;
+      top: 4px;
+      width: 3px;
+      height: 6px;
+      background: white;
+      border-radius: 1px;
+    }
+
+    .bar {
+      flex: 1;
+      background: #57ff3c;
+    }
+
+    .time {
+      position: absolute;
+      top: 31px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 42px;
+      letter-spacing: 3px;
+      font-weight: 700;
+    }
+
+    .top-right {
+      position: absolute;
+      top: 36px;
+      right: 22px;
+      font-size: 17px;
+      letter-spacing: .5px;
+    }
+
+    .focus-box {
+      position: absolute;
+      left: 50%;
+      top: 43%;
+      width: 34px;
+      height: 34px;
+      transform: translate(-50%, -50%);
+      border: 2px solid white;
+      opacity: .92;
+    }
+
+    .bottom-left {
+      position: absolute;
+      left: 20px;
+      bottom: 39px;
+      font-size: 20px;
+      letter-spacing: 1px;
+    }
+
+    .bottom-right {
+      position: absolute;
+      right: 22px;
+      bottom: 39px;
+      font-size: 20px;
+      letter-spacing: 1px;
+    }
+
+    .shutter-wrap {
+      position: absolute;
+      left: 50%;
+      bottom: 32px;
+      transform: translateX(-50%);
+      pointer-events: auto;
+    }
+
+    #recordButton {
+      width: 74px;
+      height: 74px;
+      border-radius: 50%;
+      background: #f00018;
+      border: 5px solid white;
+      box-shadow: 0 0 0 2px rgba(255,255,255,.35), 0 8px 30px rgba(0,0,0,.5);
+      cursor: pointer;
+      transition: transform 160ms ease, border-radius 250ms ease, background 160ms ease;
+    }
+
+    #recordButton:active,
+    #recordButton.recording {
+      transform: scale(.86);
+      border-radius: 22px;
+      background: #ff001d;
+      animation: pulse 700ms infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 2px rgba(255,255,255,.4), 0 0 0 0 rgba(255,0,0,.5); }
+      50% { box-shadow: 0 0 0 2px rgba(255,255,255,.4), 0 0 0 12px rgba(255,0,0,0); }
+    }
+
+    .rec {
+      position: absolute;
+      top: 92px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      letter-spacing: 2px;
+      color: #ff1a1a;
+    }
+
+    .rec-dot {
+      width: 10px;
+      height: 10px;
+      background: #ff1a1a;
+      border-radius: 50%;
+      animation: blink 700ms infinite;
+    }
+
+    #portraitViewport.recording .rec {
+      display: flex;
+    }
+
+    @keyframes blink {
+      0%, 45% { opacity: 1; }
+      46%, 100% { opacity: .25; }
+    }
+
+    #flash {
+      position: absolute;
+      inset: 0;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #flash.snap {
+      animation: flash 260ms ease;
+    }
+
+    @keyframes flash {
+      0% { opacity: 0; }
+      35% { opacity: .85; }
+      100% { opacity: 0; }
+    }
+
+    #portraitViewport.recording {
+      animation: recordBump 360ms ease;
+    }
+
+    @keyframes recordBump {
+      0% { filter: blur(0); }
+      35% { filter: blur(2px); }
+      100% { filter: blur(0); }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="game">
+    <div id="portraitViewport">
+      <img id="room" src="room.png" draggable="false" />
+
+      <div class="hud">
+        <div class="top-left">
+          <div class="battery">
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+          </div>
+          <span>97%</span>
+        </div>
+
+        <div id="clock" class="time">00:00</div>
+        <div class="top-right">4k 30fps</div>
+
+        <div class="rec">
+          <div class="rec-dot"></div>
+          <span>REC</span>
+        </div>
+
+        <div class="focus-box"></div>
+
+        <div class="bottom-left">1/60&nbsp;&nbsp;f1.4</div>
+        <div class="bottom-right">iso 200</div>
+
+        <div class="shutter-wrap">
+          <button id="recordButton" aria-label="Hold to record"></button>
+        </div>
+      </div>
+
+      <div id="flash"></div>
+    </div>
+  </div>
+
+  <script>
+    const viewport = document.getElementById("portraitViewport");
+    const room = document.getElementById("room");
+    const body = document.body;
+    const clock = document.getElementById("clock");
+    const button = document.getElementById("recordButton");
+    const flash = document.getElementById("flash");
+
+    let isDragging = false;
+    let isRecording = false;
+    let startX = 0;
+    let startOffset = 0;
+    let offsetX = 0;
+    let minOffset = 0;
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function applyRoomTransform() {
+      viewport.style.setProperty("--x", offsetX + "px");
+      room.style.transform = `translateX(${offsetX}px) scale(${isRecording ? 1.025 : 1})`;
+    }
+
+    function updateLimits() {
+      const viewportWidth = viewport.clientWidth;
+      const imageWidth = room.clientWidth;
+
+      minOffset = Math.min(0, viewportWidth - imageWidth);
+      offsetX = clamp(offsetX, minOffset, 0);
+      applyRoomTransform();
+    }
+
+    room.onload = () => {
+      updateLimits();
+      offsetX = minOffset / 2;
+      applyRoomTransform();
+    };
+
+    window.addEventListener("resize", updateLimits);
+
+    function updateClock() {
+      const now = new Date();
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      const ss = String(now.getSeconds()).padStart(2, "0");
+      clock.textContent = `${mm}:${ss}`;
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    function startDrag(e) {
+      if (e.target === button) return;
+      isDragging = true;
+      startX = e.clientX;
+      startOffset = offsetX;
+      body.classList.add("grabbing");
+      viewport.setPointerCapture(e.pointerId);
+    }
+
+    function moveDrag(e) {
+      if (!isDragging) return;
+      const dragDistance = e.clientX - startX;
+      offsetX = clamp(startOffset + dragDistance, minOffset, 0);
+      applyRoomTransform();
+    }
+
+    function endDrag(e) {
+      isDragging = false;
+      body.classList.remove("grabbing");
+      try { viewport.releasePointerCapture(e.pointerId); } catch {}
+    }
+
+    viewport.addEventListener("pointerdown", startDrag);
+    viewport.addEventListener("pointermove", moveDrag);
+    viewport.addEventListener("pointerup", endDrag);
+    viewport.addEventListener("pointercancel", endDrag);
+
+    function startRecording(e) {
+      e.preventDefault();
+      isRecording = true;
+      viewport.classList.add("recording");
+      button.classList.add("recording");
+      applyRoomTransform();
+    }
+
+    function stopRecording(e) {
+      if (!isRecording) return;
+      isRecording = false;
+      viewport.classList.remove("recording");
+      button.classList.remove("recording");
+      applyRoomTransform();
+    }
+
+    function takePhotoFlash() {
+      flash.classList.remove("snap");
+      void flash.offsetWidth;
+      flash.classList.add("snap");
+    }
+
+    button.addEventListener("pointerdown", startRecording);
+    button.addEventListener("pointerup", stopRecording);
+    button.addEventListener("pointercancel", stopRecording);
+    button.addEventListener("pointerleave", stopRecording);
+    button.addEventListener("click", takePhotoFlash);
+  </script>
+</body>
+</html>
+```
