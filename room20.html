@@ -415,6 +415,7 @@
     let snapPoints = [0];
     let snapIndex = 0;
     let dragStartClientX = 0;
+    let dragStartTime = 0;
     let suppressNextLetterClick = false;
 
     let handVisible = false;
@@ -730,6 +731,7 @@
       startX = event.clientX;
       dragStartClientX = event.clientX;
       startOffset = offsetX;
+      dragStartTime = performance.now();
       body.classList.add("grabbing");
       video.classList.remove("snapping");
       letterWorld.classList.remove("snapping");
@@ -739,38 +741,44 @@
     function pointerMove(event) {
       if (!isDragging) return;
 
-      // Snappy mode: the room itself does not follow the pointer. We only
-      // measure the gesture here and move to an adjacent view on pointerup.
       const dragDistance = event.clientX - dragStartClientX;
       if (Math.abs(dragDistance) > 6) {
         movedDuringDrag = true;
         suppressNextLetterClick = true;
       }
+
+      // Older snap feel: the panorama follows the gesture slightly with
+      // resistance, then settles decisively to a snapped view on release.
+      const resisted = dragDistance * 0.32;
+      offsetX = clamp(startOffset + resisted, minOffset, 0);
+      applyWorldOffset(false);
     }
 
     function pointerUp(event) {
       if (!isDragging) return;
 
-      const dragDistance = event.clientX - dragStartClientX;
+      const dx = event.clientX - dragStartClientX;
+      const elapsed = Math.max(1, performance.now() - dragStartTime);
+      const velocity = dx / elapsed;
+
       isDragging = false;
       body.classList.remove("grabbing");
       try { viewport.releasePointerCapture(event.pointerId); } catch {}
 
-      // A deliberate horizontal swipe advances exactly one screen.
-      const swipeThreshold = Math.max(42, viewport.clientWidth * 0.12);
-      if (Math.abs(dragDistance) >= swipeThreshold) {
-        if (dragDistance < 0) snapTo(snapIndex + 1);
-        else snapTo(snapIndex - 1);
+      const threshold = Math.max(28, viewport.clientWidth * 0.08);
+      const isSwipe = Math.abs(dx) >= threshold || Math.abs(velocity) >= 0.28;
+
+      if (isSwipe) {
+        // Swipe left reveals the next view; swipe right reveals the previous.
+        snapTo(snapIndex + (dx < 0 ? 1 : -1));
       } else {
-        // No valid swipe: remain on the current snapped view.
         snapTo(snapIndex);
       }
 
-      // Preserve the letter-tap fix: movement suppresses the synthetic click
-      // that browsers dispatch after pointerup, including when swiping began
-      // directly on top of a letter. A stationary tap still selects it.
+      // Preserve the tap fix: if the pointer actually moved, suppress the
+      // synthetic click even when the gesture began directly over a letter.
       if (movedDuringDrag) {
-        window.setTimeout(() => { suppressNextLetterClick = false; }, 100);
+        window.setTimeout(() => { suppressNextLetterClick = false; }, 140);
       }
     }
 
